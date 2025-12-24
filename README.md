@@ -2,6 +2,7 @@
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-red)](https://www.arxiv.org/abs/2506.08541)
 [![Project Webpage](https://img.shields.io/badge/Project_Page-Website-green?logo=googlechrome&logoColor=white)](https://traj-flow.github.io/)
+[![Blog](https://img.shields.io/badge/Blog-2ea44f)](https://qiyan98.github.io/blog/2025/cogen-motion/)
 
 The official PyTorch implementation of IROS'25 paper named "TrajFlow: Multi-modal Motion Prediction via Flow Matching".
 
