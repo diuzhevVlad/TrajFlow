@@ -1,17 +1,28 @@
-numpy
+# Unified dependency set for TrajFlow on Python 3.10.
+# This keeps PyTorch, TensorFlow, and Waymo metrics on a compatible stack.
+
+# Core training stack
+torch==2.2.0
+torchvision==0.17.0
+torchaudio==2.2.0
+
+# Waymo metrics / preprocessing stack
+tensorflow==2.12.0
+waymo-open-dataset-tf-2-12-0==1.6.4
+numpy==1.23.5
+protobuf==3.20.3
+typing-extensions>=4.8,<5
+
+# Project dependencies
 wandb
 easydict
 pyyaml
-scikit-image
+scikit-image==0.20.0
 tqdm
 einops
-scikit-learn
-matplotlib
+scikit-learn==1.2.2
+matplotlib==3.6.1
 accelerate
-einops
 ema-pytorch
 gitpython
-protobuf===3.20.3
-typing-extensions===4.5.0
-GitPython
-tensorboard
+tensorboard>=2.12,<2.13

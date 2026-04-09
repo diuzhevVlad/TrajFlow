@@ -26,12 +26,11 @@ So follow the standard training and validation path below, and skip interactive 
 conda create -n trajflow python=3.10 -y
 conda activate trajflow
 
-pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cu118
-pip install waymo-open-dataset-tf-2-12-0
 pip install -r setup/requirements.txt
 ```
 
 This now installs `tensorboard` too, which the repo uses for local experiment dashboards.
+It also pins a compatible `torch` / `tensorflow` / `waymo-open-dataset` stack so `pip` does not downgrade `torch` during dependency resolution.
 
 ## 2. Build CUDA Extensions
 
@@ -44,7 +43,18 @@ export TORCH_CUDA_ARCH_LIST="9.0"
 python setup/setup_trajflow.py develop
 ```
 
-If that fails because `nvcc` is missing or incompatible, make sure a CUDA 11.8 toolkit is available in your shell first.
+Your `nvidia-smi` can show a newer driver capability such as `CUDA Version: 13.0` and that is fine.
+For this repo, the important part is having an `nvcc` toolkit available for compiling the custom ops.
+With the pinned `torch==2.2.0` wheel, a CUDA 12.1 toolkit is the safest match.
+
+If `nvcc` is missing or incompatible, make sure a CUDA 12.1 toolkit is available in your shell first.
+
+You can install it locally without root from the repo root:
+
+```bash
+bash setup/install_cuda12_local.sh
+source setup/use_local_cuda12.sh
+```
 
 Quick checks:
 
@@ -324,8 +334,6 @@ If you want the shortest possible version, from repo root:
 ```bash
 conda create -n trajflow python=3.10 -y
 conda activate trajflow
-pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cu118
-pip install waymo-open-dataset-tf-2-12-0
 pip install -r setup/requirements.txt
 export TORCH_CUDA_ARCH_LIST="9.0"
 python setup/setup_trajflow.py develop

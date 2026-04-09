@@ -25,17 +25,17 @@ Please note that we use `python=3.10` mainly for compatibility with the `waymo-o
 **Step 2:** Install the required packages
 
 ```bash
-# install pytorch
-## [cuda 11.8]
-# conda install pytorch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 pytorch-cuda=11.8 -c pytorch -c nvidia
-pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cu118
-
-# install waymo helper
-pip install waymo-open-dataset-tf-2-12-0
-
-# install other packages
+# install the pinned runtime stack: pytorch + tensorflow + waymo + project deps
 pip install -r setup/requirements.txt
 ```
+
+This file pins a compatible stack around:
+
+- `torch==2.2.0`
+- `tensorflow==2.12.0`
+- `waymo-open-dataset-tf-2-12-0==1.6.4`
+
+so `pip` does not silently downgrade `torch` or pull a newer incompatible Waymo metrics wheel.
 
 **Step 3:** Compile CUDA code
 
@@ -43,21 +43,19 @@ pip install -r setup/requirements.txt
 conda install git
 conda install -c conda-forge ninja
 
-# we use compute nodes with CUDA 11.8
+# a recent NVIDIA driver is enough to run the pinned torch wheel
+# but compiling TrajFlow custom ops still requires an nvcc toolkit in your shell
+# for torch==2.2.0, CUDA 12.1 is the safest match
+export TORCH_CUDA_ARCH_LIST="9.0"
 python setup/setup_trajflow.py develop
 
-# if you don't have CUDA 11.8 installed, you can use the following command to install it
-# ref: https://stackoverflow.com/questions/67483626/setup-tensorflow-2-4-on-ubuntu-20-04-with-gpu-without-sudo
-mkdir -p cuda_toolkits/cuda-11.8 && mkdir -p tmp
-wget https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda_11.8.0_520.61.05_linux.run
-bash ./cuda_11.8.0_520.61.05_linux.run --silent --tmpdir=$(pwd)/tmp --toolkit --toolkitpath=$(pwd)/cuda_toolkits/cuda-11.8
-rm -rf tmp
-export CUDA11=$(pwd)/cuda_toolkits/cuda-11.8
-export PATH=$CUDA11/bin:$PATH
-export LD_LIBRARY_PATH=$CUDA11/lib64:$CUDA11/extras/CUPTI/lib64:$LD_LIBRARY_PATH
-export TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6+PTX"
+# if you don't have a compatible toolkit installed, you can install CUDA 12.1 locally
+bash setup/install_cuda12_local.sh
+source setup/use_local_cuda12.sh
 python setup/setup_trajflow.py develop
 ```
+
+`nvidia-smi` showing a newer driver such as `CUDA Version: 13.0` is fine. That is the driver capability, not the toolkit used for compilation.
 
 Finally, run the following for sanity check:
 
