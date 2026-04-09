@@ -11,62 +11,70 @@ The official PyTorch implementation of IROS'25 paper named "TrajFlow: Multi-moda
 ![TrajFlow diagram](assets/trajflow_overview.png)
 We propose a new flow matching framework to predict multi-modal trajectories on the large-scale Waymo Open Motion Dataset.
 
-## Install Python Environment
+## Docker Setup
 
-**Step 1:** Create a python environment
+The recommended way to run this repo is the provided Docker image. It includes:
 
-```bash
-conda create --name trajflow python=3.10 -y
-conda activate trajflow 
-```
-
-Please note that we use `python=3.10` mainly for compatibility with the `waymo-open-dataset-tf-2-12-0` package, which is required for metrics evaluation.
-
-**Step 2:** Install the required packages
-
-```bash
-# install the pinned runtime stack: pytorch + tensorflow + waymo + project deps
-pip install -r setup/requirements.txt
-```
-
-This file pins a compatible stack around:
-
+- `python==3.10`
 - `torch==2.2.0`
 - `tensorflow==2.12.0`
 - `waymo-open-dataset-tf-2-12-0==1.6.4`
+- the compiled TrajFlow CUDA extensions
 
-so `pip` does not silently downgrade `torch` or pull a newer incompatible Waymo metrics wheel.
-
-**Step 3:** Compile CUDA code
-
-```bash
-conda install git
-conda install -c conda-forge ninja
-
-# a recent NVIDIA driver is enough to run the pinned torch wheel
-# but compiling TrajFlow custom ops still requires an nvcc toolkit in your shell
-# for torch==2.2.0, CUDA 12.1 is the safest match
-export TORCH_CUDA_ARCH_LIST="9.0"
-python setup/setup_trajflow.py develop
-
-# if you don't have a compatible toolkit installed, you can install CUDA 12.1 locally
-bash setup/install_cuda12_local.sh
-source setup/use_local_cuda12.sh
-python setup/setup_trajflow.py develop
-```
-
-`nvidia-smi` showing a newer driver such as `CUDA Version: 13.0` is fine. That is the driver capability, not the toolkit used for compilation.
-
-Finally, run the following for sanity check:
+Build the image from the repo root:
 
 ```bash
-python -c "import torch; import trajflow; print(torch.__version__, trajflow.__file__, 'pytorch sanity check pass'); "
-python -c "from waymo_open_dataset.metrics.ops import py_metrics_ops; print('waymo metrics sanity check pass'); "
+docker build -t trajflow:cu121 .
 ```
+
+Prepare local writable directories on the host:
+
+```bash
+mkdir -p data/waymo output
+```
+
+Download the required intention-points file on the host:
+
+```bash
+curl -L https://raw.githubusercontent.com/sshaoshuai/MTR/master/data/waymo/cluster_64_center_dict.pkl -o data/waymo/cluster_64_center_dict.pkl
+```
+
+Run an interactive shell with GPUs enabled:
+
+```bash
+bash scripts/run_docker.sh
+```
+
+The launcher mounts:
+
+- `$(pwd)/data/waymo` to `/workspace/TrajFlow/data/waymo`
+- `/data2/datasets/Waymo/waymo_motion_sc` to `/workspace/TrajFlow/data/waymo/scenario` as read-only
+- `$(pwd)/output` to `/workspace/TrajFlow/output`
+
+You can override the dataset path or image name:
+
+```bash
+WAYMO_SCENARIO_DIR=/path/to/waymo_motion_sc IMAGE_NAME=trajflow:cu121 bash scripts/run_docker.sh
+```
+
+You can also run a one-off command instead of an interactive shell:
+
+```bash
+bash scripts/run_docker.sh python -c "import torch; print(torch.cuda.is_available())"
+```
+
+Inside the container, verify the environment:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.device_count())"
+python -c "from waymo_open_dataset.metrics.ops import py_metrics_ops; print('waymo metrics ok')"
+```
+
+The host `nvidia-smi` driver can be newer than CUDA 12.1. The image uses a CUDA 12.1 toolkit because it matches the pinned PyTorch runtime and extension build path.
 
 ## Waymo Dataset Preparation
 
-**Step 1:** Download Waymo Open Motion Dataset `v1.3.0` from the [official website](https://waymo.com/open/download/) at `waymo_open_dataset_motion_v_1_3_0/uncompressed/scenario`, and organize the data as follows:
+**Step 1:** Download Waymo Open Motion Dataset from the [official website](https://waymo.com/open/download/) and organize the raw scenario files as follows:
 
 ```bash
 ├── data
@@ -78,7 +86,7 @@ python -c "from waymo_open_dataset.metrics.ops import py_metrics_ops; print('way
 ├── ...
 ```
 
-**Step 2:** Preprocess the dataset:
+**Step 2:** Preprocess the dataset inside the container:
 
 ```bash
 cd trajflow/datasets/waymo
@@ -106,18 +114,16 @@ The processed data will be saved to `data/waymo/` directory as follows:
 We use the clustering result from [MTR](https://github.com/sshaoshuai/MTR) for intention points, which is saved in `data/waymo/cluster_64_center_dict.pkl`.
 This file is required before training or evaluation. If it is missing, model construction will stop with an explicit error.
 
-```bash
-mkdir -p data/waymo
-curl -L https://raw.githubusercontent.com/sshaoshuai/MTR/master/data/waymo/cluster_64_center_dict.pkl -o data/waymo/cluster_64_center_dict.pkl
-```
-
 ## Training and Evaluation
 
 The shipped Waymo YAMLs now match the paper recipe more closely. The training parser accepts both `--epochs` and `--epoch` if you want to override them manually.
 
 ```bash
-## setup wandb credentials
+## setup wandb credentials if you use it
 wandb login
+
+## or disable it completely
+export WANDB_DISABLED=true
 
 ## training
 cd runner
