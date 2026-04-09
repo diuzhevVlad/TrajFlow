@@ -9,7 +9,7 @@ torchaudio==2.2.0
 # Waymo metrics / preprocessing stack
 tensorflow==2.12.0
 waymo-open-dataset-tf-2-12-0==1.6.4
-numpy==1.23.5
+numpy==1.23
 protobuf==3.20.3
 typing-extensions>=4.8,<5
 
