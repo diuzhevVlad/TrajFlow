@@ -17,9 +17,23 @@ import re
 import time
 import copy
 import torch
-import wandb
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 from .tester import eval_one_epoch
+
+
+def _log_eval_to_tensorboard(tb_log, wb_dict, epoch, prefix='eval'):
+    """Log evaluation metrics to TensorBoard."""
+    if tb_log is None:
+        return
+
+    for key, val in wb_dict.items():
+        if '-----' in key or isinstance(val, dict):
+            continue
+        tb_log.add_scalar(f'{prefix}/{key}', val, epoch)
 
 
 def get_ema_weight_keywords(ckpt_keys, ema_coef, logger):
@@ -49,7 +63,7 @@ def get_ema_weight_keywords(ckpt_keys, ema_coef, logger):
     return weight_keywords
 
 
-def eval_single_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=None, submission_info=None):
+def eval_single_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=None, submission_info=None, tb_log=None):
     """Evaluate a single checkpoint with optional EMA variants."""
     cfg_ = copy.deepcopy(cfg)
     dist_test = cfg.OPT.DIST_TRAIN
@@ -90,11 +104,13 @@ def eval_single_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=Non
         cfg = copy.deepcopy(cfg_)
         cfg.SAVE_DIR.EVAL_OUTPUT_DIR = result_dir
         
-        eval_one_epoch(
+        wb_dict = eval_one_epoch(
             denoiser, test_loader, cfg, epoch, logger,
             inter_pred=args.interactive, flag_submission=args.submit, 
             submission_info=submission_info, logger_iter_interval=args.logger_iter_interval
         )
+
+        _log_eval_to_tensorboard(tb_log, wb_dict, epoch, prefix=f'eval/{weight_kw}')
 
 
 def get_unevaluated_ckpt(ckpt_dir, record_file, start_epoch):
@@ -121,7 +137,7 @@ def get_unevaluated_ckpt(ckpt_dir, record_file, start_epoch):
     return -1, None
 
 
-def repeat_eval_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=None, submission_info=None):
+def repeat_eval_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=None, submission_info=None, tb_log=None):
     """Repeatedly evaluate checkpoints as they become available."""
     if args_ema_coef is not None:
         raise NotImplementedError('EMA checkpoint variants not supported for repeated evaluation')
@@ -137,7 +153,7 @@ def repeat_eval_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=Non
     
     # Setup wandb logging - use the same wandb run as training
     wb_log = None
-    if cfg.LOCAL_RANK == 0:
+    if cfg.LOCAL_RANK == 0 and wandb is not None:
         # Get the current wandb run instead of creating a new one
         wb_log = wandb.run
     
@@ -188,9 +204,9 @@ def repeat_eval_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=Non
             eval_log_dict = {f'eval/{key}': val for key, val in wb_dict.items()}
             eval_log_dict['epoch'] = epoch_id
             wb_log.log(eval_log_dict)
+        _log_eval_to_tensorboard(tb_log, wb_dict, epoch_id)
         
         # Record evaluated epoch
         with open(record_file, 'a') as f:
             f.write(f'{epoch_id}\n')
         logger.info(f'Epoch {epoch_id} has been evaluated')
-

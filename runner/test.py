@@ -22,6 +22,10 @@ from easydict import EasyDict
 
 
 import torch
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ImportError:
+    SummaryWriter = None
 
 from trajflow.datasets import build_dataloader
 from trajflow.config import init_cfg, cfg_from_yaml_file, log_config_to_file
@@ -217,6 +221,11 @@ def main():
     
     """Init"""
     args, cfg, logger = parse_config()
+    tb_log = None
+    if cfg.LOCAL_RANK == 0 and SummaryWriter is not None:
+        tb_dir = os.path.join(cfg.SAVE_DIR.EVAL_OUTPUT_DIR, 'tensorboard')
+        tb_log = SummaryWriter(log_dir=tb_dir)
+        logger.info(f'TensorBoard logging directory: {tb_dir}')
 
     if args.submit:
         method_name = args.method_nm
@@ -265,9 +274,12 @@ def main():
     """start evaluation"""
     with torch.no_grad():
         if args.eval_all:
-            repeat_eval_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=args.ema_coef, submission_info=submission_info)
+            repeat_eval_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=args.ema_coef, submission_info=submission_info, tb_log=tb_log)
         else:
-            eval_single_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=args.ema_coef, submission_info=submission_info)
+            eval_single_ckpt(denoiser, test_loader, cfg, args, logger, args_ema_coef=args.ema_coef, submission_info=submission_info, tb_log=tb_log)
+
+    if tb_log is not None:
+        tb_log.close()
 
 
 if __name__ == '__main__':

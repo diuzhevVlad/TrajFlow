@@ -19,7 +19,10 @@ import tqdm
 from torch.nn.utils import clip_grad_norm_
 from trajflow.utils.init_objective import prepare_denoiser_data
 from utils.tester import eval_one_epoch
-import wandb
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 
 def _get_next_batch(dataloader_iter, train_loader, logger, cur_it):
@@ -50,6 +53,18 @@ def _log_training_info(logger, cur_epoch, total_epochs, accumulated_iter, cur_it
         f'{tbar.format_interval(remaining_second_all)}, {disp_str}')
 
 
+def _build_loss_per_level_figure(val):
+    fig = plt.figure()
+    t_plot = np.array(list(val.keys()))
+    val_plot = np.array(list(val.values()))
+    flag_valid = val_plot > 0
+    plt.plot(t_plot[flag_valid], val_plot[flag_valid], '-o')
+    plt.xlim(t_plot.min(), t_plot.max())
+    plt.xlabel('Noise level')
+    plt.ylabel('Loss')
+    return fig
+
+
 def _log_to_wandb(wb_log, cur_lr, wb_dict, grad_total_norm, accumulated_iter):
     """Log metrics to wandb."""
     if wb_log is None:
@@ -64,22 +79,43 @@ def _log_to_wandb(wb_log, cur_lr, wb_dict, grad_total_norm, accumulated_iter):
     
     for key, val in wb_dict.items():
         if 'denoiser_loss_per_level' in key:
-            # Create matplotlib figure for loss per level
-            fig = plt.figure()
-            t_plot = np.array(list(val.keys()))
-            val_plot = np.array(list(val.values()))
-            flag_valid = val_plot > 0
-            plt.plot(t_plot[flag_valid], val_plot[flag_valid], '-o')
-            plt.xlim(t_plot.min(), t_plot.max())
-            plt.xlabel('Noise level')
-            plt.ylabel('Loss')
-            log_dict[f'train/{key}'] = wandb.Image(fig)
+            fig = _build_loss_per_level_figure(val)
+            if wandb is not None:
+                log_dict[f'train/{key}'] = wandb.Image(fig)
             plt.close(fig)
         else:
             log_dict[f'train/{key}'] = val
     
     # Log all metrics at once with the same step
     wb_log.log(log_dict)
+
+
+def _log_to_tensorboard(tb_log, cur_lr, wb_dict, grad_total_norm, accumulated_iter):
+    """Log metrics to TensorBoard."""
+    if tb_log is None:
+        return
+
+    tb_log.add_scalar('meta_data/learning_rate', cur_lr, accumulated_iter)
+    tb_log.add_scalar('train/grad_total_norm', float(grad_total_norm), accumulated_iter)
+
+    for key, val in wb_dict.items():
+        if 'denoiser_loss_per_level' in key:
+            fig = _build_loss_per_level_figure(val)
+            tb_log.add_figure(f'train/{key}', fig, global_step=accumulated_iter)
+            plt.close(fig)
+        else:
+            tb_log.add_scalar(f'train/{key}', val, accumulated_iter)
+
+
+def _log_eval_to_tensorboard(tb_log, wb_dict, epoch, prefix='eval'):
+    """Log evaluation metrics to TensorBoard."""
+    if tb_log is None:
+        return
+
+    for key, val in wb_dict.items():
+        if '-----' in key or isinstance(val, dict):
+            continue
+        tb_log.add_scalar(f'{prefix}/{key}', val, epoch)
 
 
 def _should_save_checkpoint(trained_epoch, ckpt_save_interval, total_epochs, rank):
@@ -136,7 +172,7 @@ def _update_best_model_record(best_record_file, trained_epoch, map_score):
 
 
 def train_one_epoch(denoiser, optimizer, scheduler, train_loader, ema_helper, cfg,
-                    cur_epoch, accumulated_iter, logger, wb_log, tbar, 
+                    cur_epoch, accumulated_iter, logger, wb_log, tb_log, tbar,
                     leave_pbar=False, ckpt_save_time_interval=300, logger_iter_interval=50):
     """Train for one epoch."""
     rank = cfg.LOCAL_RANK
@@ -200,6 +236,8 @@ def train_one_epoch(denoiser, optimizer, scheduler, train_loader, ema_helper, cf
 
             if wb_log is not None:
                 _log_to_wandb(wb_log, cur_lr, wb_dict, grad_total_norm, accumulated_iter)
+            if tb_log is not None:
+                _log_to_tensorboard(tb_log, cur_lr, wb_dict, grad_total_norm, accumulated_iter)
 
             # Save checkpoint during training
             time_past_this_epoch = pbar.format_dict['elapsed']
@@ -216,7 +254,7 @@ def train_one_epoch(denoiser, optimizer, scheduler, train_loader, ema_helper, cf
 
 
 def train_model(denoiser, optimizer, scheduler, train_loader, ema_helper, cfg, 
-                start_epoch, start_iter, logger, wb_log, train_sampler=None, test_loader=None, 
+                start_epoch, start_iter, logger, wb_log, tb_log, train_sampler=None, test_loader=None,
                 ckpt_save_interval=1, ckpt_save_time_interval=300, max_ckpt_save_num=50, 
                 logger_iter_interval=50):
     """Main training loop."""
@@ -227,7 +265,7 @@ def train_model(denoiser, optimizer, scheduler, train_loader, ema_helper, cfg,
     eval_output_dir = cfg.SAVE_DIR.EVAL_OUTPUT_DIR
 
     # Define wandb metrics to use different step scales
-    if rank == 0 and wb_log is not None:
+    if rank == 0 and wb_log is not None and wandb is not None:
         # Training metrics use iteration steps
         wandb.define_metric("train/*", step_metric="iteration")
         # Evaluation metrics use epoch steps
@@ -250,7 +288,7 @@ def train_model(denoiser, optimizer, scheduler, train_loader, ema_helper, cfg,
             # Train one epoch
             accumulated_iter = train_one_epoch(
                 denoiser, optimizer, scheduler, train_loader, ema_helper, cfg,
-                cur_epoch, accumulated_iter, logger, wb_log, tbar, 
+                cur_epoch, accumulated_iter, logger, wb_log, tb_log, tbar,
                 leave_pbar=(cur_epoch + 1 == total_epochs),
                 ckpt_save_time_interval=ckpt_save_time_interval, 
                 logger_iter_interval=logger_iter_interval)
@@ -276,11 +314,13 @@ def train_model(denoiser, optimizer, scheduler, train_loader, ema_helper, cfg,
                 torch.cuda.empty_cache()
 
                 if rank == 0:
-                    # Log to wandb
                     wb_dict = {k: v for k, v in wb_dict.items() if '-----' not in k}  # skip meaningless entries
-                    eval_log_dict = {f'eval/{key}': val for key, val in wb_dict.items()}
-                    eval_log_dict['epoch'] = trained_epoch
-                    wb_log.log(eval_log_dict)
+                    if wb_log is not None:
+                        eval_log_dict = {f'eval/{key}': val for key, val in wb_dict.items()}
+                        eval_log_dict['epoch'] = trained_epoch
+                        wb_log.log(eval_log_dict)
+                    if tb_log is not None:
+                        _log_eval_to_tensorboard(tb_log, wb_dict, trained_epoch)
 
                     # Check best model
                     best_record_file = os.path.join(eval_output_dir, 'best_eval_record.txt')

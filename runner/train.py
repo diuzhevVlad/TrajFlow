@@ -21,7 +21,7 @@ def main():
     """
 
     """Init"""
-    args, cfg, logger, wb_log = init_basics()
+    args, cfg, logger, wb_log, tb_log = init_basics()
 
 
     """build dataloader"""
@@ -58,7 +58,7 @@ def main():
                 % (cfg.EXP_GROUP_PATH, cfg.TAG, args.extra_tag))
     
     train_model(denoiser, optimizer, scheduler, train_loader, ema_helper, cfg,
-                start_epoch, it, logger, wb_log, 
+                start_epoch, it, logger, wb_log, tb_log,
                 train_sampler=train_sampler, test_loader=test_loader,
                 ckpt_save_interval=args.ckpt_save_interval, ckpt_save_time_interval=args.ckpt_save_time_interval,
                 max_ckpt_save_num=args.max_ckpt_save_num, logger_iter_interval=args.logger_iter_interval)
@@ -77,7 +77,10 @@ def main():
     args.interactive = False                    # do not run interactive evaluation
     args.submit = False                         # do not generate submission files
     repeat_eval_ckpt(denoiser.module if cfg.OPT.DIST_TRAIN else denoiser, test_loader, cfg, args, logger, 
-                     args_ema_coef=None)
+                     args_ema_coef=None, tb_log=tb_log)
+
+    if tb_log is not None:
+        tb_log.close()
 
     logger.info('**********************End evaluation %s/%s(%s)**********************' %
                 (cfg.EXP_GROUP_PATH, cfg.TAG, args.extra_tag))

@@ -15,9 +15,16 @@ import shutil
 import yaml
 from easydict import EasyDict
 
-import wandb
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 import torch
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ImportError:
+    SummaryWriter = None
 
 from trajflow.config import init_cfg, cfg_from_yaml_file, log_config_to_file
 from trajflow.utils import common_utils
@@ -163,7 +170,9 @@ def init_basics():
 
     # wandb log
     wb_log = None
-    if cfg.LOCAL_RANK == 0:
+    wandb_disabled = os.environ.get('WANDB_DISABLED', '').lower() in {'1', 'true', 'yes'}
+    wandb_mode = os.environ.get('WANDB_MODE', '').lower()
+    if cfg.LOCAL_RANK == 0 and not wandb_disabled and wandb_mode != 'disabled' and wandb is not None:
         # Initialize wandb run for training
         wb_log = wandb.init(
             project="trajflow",
@@ -171,6 +180,16 @@ def init_basics():
             config=cfg,
             dir=output_dir
         )
+    elif cfg.LOCAL_RANK == 0:
+        logger.info('Weights & Biases logging is disabled. Metrics will still be written to local log files.')
+
+    tb_log = None
+    if cfg.LOCAL_RANK == 0 and SummaryWriter is not None:
+        tb_dir = os.path.join(output_dir, 'tensorboard')
+        tb_log = SummaryWriter(log_dir=tb_dir)
+        logger.info(f'TensorBoard logging directory: {tb_dir}')
+    elif cfg.LOCAL_RANK == 0:
+        logger.info('TensorBoard is unavailable. Install the tensorboard package to enable local dashboards.')
 
     # save version control information
     repo = git.Repo(search_parent_directories=True)
@@ -201,4 +220,4 @@ def init_basics():
 
     ###### End of Init ######
 
-    return args, cfg, logger, wb_log
+    return args, cfg, logger, wb_log, tb_log
