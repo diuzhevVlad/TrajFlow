@@ -48,12 +48,20 @@ def build_dense_future_prediction_layers(hidden_dim, d_obj, num_future_frames):
 def build_motion_query(d_model, model_cfg):
     _init_cfg = init_cfg()
     intention_points_file = _init_cfg.ROOT_DIR / model_cfg.INTENTION_POINTS_FILE
+    if not intention_points_file.exists():
+        raise FileNotFoundError(
+            'Missing intention points file: '
+            f'{intention_points_file}. '
+            'Download or copy cluster_64_center_dict.pkl into data/waymo/ as described in README.md.'
+        )
+
+    device = getattr(model_cfg, 'DEVICE', 'cuda' if torch.cuda.is_available() else 'cpu')
     with open(intention_points_file, 'rb') as f:
         intention_points_dict = pickle.load(f)
     intention_points = {}
     for cur_type in model_cfg.OBJECT_TYPE:
         cur_intention_points = intention_points_dict[cur_type]
-        cur_intention_points = torch.from_numpy(cur_intention_points).float().view(-1, 2).cuda()
+        cur_intention_points = torch.from_numpy(cur_intention_points).float().view(-1, 2).to(device)
         intention_points[cur_type] = cur_intention_points
 
     intention_query_mlps = build_mlps(c_in=d_model, mlp_channels=[d_model, d_model], ret_before_act=True)

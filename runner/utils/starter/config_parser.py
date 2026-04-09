@@ -33,7 +33,7 @@ def parse_config():
 
     """optimizaion parameters"""
     parser.add_argument('--batch_size', type=int, default=None, help='batch size for training')
-    parser.add_argument('--epochs', type=int, default=None, help='number of epochs to train for')
+    parser.add_argument('--epochs', '--epoch', dest='epochs', type=int, default=None, help='number of epochs to train for')
     parser.add_argument('--learning_rate', default=None, type=float, help='Overwrite the learning rate.')
     parser.add_argument('--lr_scheduler', default=None, type=str, choices=['cosine', 'lambdaLR', 'linearLR', 'constant'], help='Overwrite the LR scheduler.')
     parser.add_argument('--weight_decay', default=None, type=float, help='Overwrite the weight decay.')

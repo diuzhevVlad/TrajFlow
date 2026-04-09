@@ -110,13 +110,13 @@ MODEL_DMT:
 OPT:
     # optimization hyperparameters
     BATCH_SIZE_PER_GPU: 10
-    NUM_EPOCHS: 30
+    NUM_EPOCHS: 40
 
     OPTIMIZER: AdamW
     LR: 0.0001
     WEIGHT_DECAY: 0.01
 
-    SCHEDULER: lambdaLR
+    SCHEDULER: linearLR
     DECAY_STEP_LIST: [22, 24, 26, 28]
     LR_DECAY: 0.5
     LR_CLIP: 0.000001

@@ -106,8 +106,16 @@ The processed data will be saved to `data/waymo/` directory as follows:
 ```
 
 We use the clustering result from [MTR](https://github.com/sshaoshuai/MTR) for intention points, which is saved in `data/waymo/cluster_64_center_dict.pkl`.
+This file is required before training or evaluation. If it is missing, model construction will stop with an explicit error.
+
+```bash
+mkdir -p data/waymo
+curl -L https://raw.githubusercontent.com/sshaoshuai/MTR/master/data/waymo/cluster_64_center_dict.pkl -o data/waymo/cluster_64_center_dict.pkl
+```
 
 ## Training and Evaluation
+
+The shipped Waymo YAMLs now match the paper recipe more closely. The training parser accepts both `--epochs` and `--epoch` if you want to override them manually.
 
 ```bash
 ## setup wandb credentials
@@ -115,7 +123,7 @@ wandb login
 
 ## training
 cd runner
-bash scripts/dist_train.sh 4 --cfg_file cfgs/waymo/trajflow+100_percent_data.yaml --epoch 40 --batch_size 80 --extra_tag trajflow --max_ckpt_save_num 100 --ckpt_save_interval 1
+bash scripts/dist_train.sh 4 --cfg_file cfgs/waymo/trajflow+100_percent_data.yaml --batch_size 80 --extra_tag trajflow --max_ckpt_save_num 100 --ckpt_save_interval 1
 
 ## evaluation
 ### validation set
