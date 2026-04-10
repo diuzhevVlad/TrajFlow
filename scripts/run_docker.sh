@@ -6,7 +6,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE_NAME="${IMAGE_NAME:-trajflow:cu121}"
 WAYMO_SCENARIO_DIR="${WAYMO_SCENARIO_DIR:-/data2/datasets/Waymo/waymo_motion_sc}"
 SHM_SIZE="${SHM_SIZE:-16g}"
-GPU_ARGS="${GPU_ARGS:---gpus all}"
 
 mkdir -p "${ROOT_DIR}/data/waymo" "${ROOT_DIR}/output"
 
@@ -31,7 +30,7 @@ if [ -t 0 ] && [ -t 1 ]; then
     docker_tty_args=(-it)
 fi
 
-exec docker run --rm "${docker_tty_args[@]}" ${GPU_ARGS} --shm-size="${SHM_SIZE}" \
+exec docker run --rm "${docker_tty_args[@]}" --gpus '"device=4,5"' --shm-size="${SHM_SIZE}" \
     -v "${ROOT_DIR}/data/waymo:/workspace/TrajFlow/data/waymo" \
     -v "${WAYMO_SCENARIO_DIR}:/workspace/TrajFlow/data/waymo/scenario:ro" \
     -v "${ROOT_DIR}/output:/workspace/TrajFlow/output" \

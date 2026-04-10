@@ -191,10 +191,13 @@ def init_basics():
     elif cfg.LOCAL_RANK == 0:
         logger.info('TensorBoard is unavailable. Install the tensorboard package to enable local dashboards.')
 
-    # save version control information
-    repo = git.Repo(search_parent_directories=True)
-    sha = repo.head.object.hexsha
-    logger.info("git hash: {}".format(sha))
+    # save version control information when git metadata is available
+    try:
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha
+        logger.info("git hash: {}".format(sha))
+    except (git.exc.InvalidGitRepositoryError, ValueError, OSError) as err:
+        logger.warning(f'Git metadata unavailable, skipping git hash logging: {err}')
 
     # backup code
     code_backup_dir = os.path.join(output_dir, 'code_backup')

@@ -50,6 +50,7 @@ The launcher mounts:
 - `$(pwd)/data/waymo` to `/workspace/TrajFlow/data/waymo`
 - `/data2/datasets/Waymo/waymo_motion_sc` to `/workspace/TrajFlow/data/waymo/scenario` as read-only
 - `$(pwd)/output` to `/workspace/TrajFlow/output`
+- host GPUs `4,5` into the container
 
 You can override the dataset path or image name:
 
